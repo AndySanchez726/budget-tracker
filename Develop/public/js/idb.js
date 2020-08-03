@@ -19,7 +19,7 @@ request.onsuccess = function(event) {
     // check if app is online, if yes run uploadEntries() function to send all local db data to api
     if (navigator.online) {
         // not created yet
-        // uploadEntries();
+        uploadEntries();
     }
 };
 
@@ -39,3 +39,49 @@ function saveRecord(record) {
     // add record to your store with add methode
     entryObjectStore.add(record);
 }
+
+function uploadEntries() {
+    // open a transaction on your db
+    const transaction = db.transaction(['new_entry'], 'readwrite');
+
+    // access your object store
+    const entryObjectStore = transaction.objectStore('new_entry');
+
+    // get all records from store and set to a variable
+    const getAll = entryObjectStore.getAll();
+
+    // upon a successful .getAll() execution, run this function
+    getAll.onsuccess = function() {
+        // if there was data in indexedDb's store, let's send it to the api server
+        if (getAll.result.length > 0) {
+        fetch('/api/transaction', {
+            method: 'POST',
+            body: JSON.stringify(getAll.result),
+            headers: {
+            Accept: 'application/json, text/plain, */*',
+            'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(serverResponse => {
+            if (serverResponse.message) {
+                throw new Error(serverResponse);
+            }
+            // open one more transaction
+            const transaction = db.transaction(['new_entry'], 'readwrite');
+            // access the new_entry object store
+            const entryObjectStore = transaction.objectStore('new_entry');
+            // clear all items in your store
+            entryObjectStore.clear();
+
+            alert('All saved entrires have been submitted!');
+            })
+            .catch(err => {
+            console.log(err);
+            });
+        }
+    };
+}
+
+// listen for app coming back online
+window.addEventListener('online', uploadEntries);
